@@ -1,6 +1,6 @@
-//modified by:
-//date:
-//purpose:
+ //modified by: Aurora Hernandez
+//date: 05/30/17
+//purpose: lab01 Git
 //
 //cs3350 Spring 2017 Lab-1
 //author: Gordon Griesel
@@ -246,9 +246,16 @@ void movement(Game *game)
 
 	//check for collision with shapes...
 	//Shape *s;
+//**************************************
+	Shape *s = &game->box;
+	if (p->s.center.y < s->center.y + s->height)
+	    p->velocity.y = -p->velocity.y;
+
+
+
 
 	//check for off-screen
-	if (p->s.center.y < 0.0) {
+	if (p->s.center.y < 0.0 || p->s.center.y > WINDOW_HEIGHT) {
 		std::cout << "off screen" << std::endl;
 		game->n = 0;
 	}
