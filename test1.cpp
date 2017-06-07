@@ -1,3 +1,6 @@
+// Aurora Hernandez
+//Date: 06/2017
+
 
 #include <iostream>
 #include <cstdlib>
