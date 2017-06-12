@@ -41,11 +41,13 @@
 #include <X11/keysym.h>
 #include <GL/glx.h>
 #include "fonts.h" //include fonts.h
+#include <math.h> //sqrt
+#include <stdio.h>
 
 #define WINDOW_WIDTH  800
 #define WINDOW_HEIGHT 600
 
-#define MAX_PARTICLES 4000
+#define MAX_PARTICLES 10000 //increased number of particles
 #define GRAVITY 0.1
 
 //X Windows variables
@@ -68,17 +70,21 @@ struct Shape {
 struct Particle {
     Shape s;
     Vec velocity;
+    Shape q; // for circle
+    GLubyte color[3]; // unsigned bytes for color 
 };
 
 class Game {
 public:
     Shape box[5]; // specified to 5 boxes 
     Shape circle; // for circle
+    bool bubbler; // particle bubbler from top
     Particle particle[MAX_PARTICLES];
     int n;
 
     Game()
     {
+        bubbler = 0; // bubbler off 
         n = 0;
     }
 };
@@ -140,7 +146,7 @@ void set_title(void)
 {
     //Set the window title bar.
     XMapWindow(dpy, win);
-    XStoreName(dpy, win, "335 Lab1   LMB for particle");
+    XStoreName(dpy, win, "335 hw1   LMB for particle");
 }
 
 void cleanupXWindows(void)
@@ -207,6 +213,10 @@ void makeParticle(Game *game, int x, int y)
     p->s.center.y = y;
     p->velocity.y = rnd() * 1.0 - 0.5;
     p->velocity.x = rnd() * 1.0 - 0.5;
+    //randomize color, shades of blue
+    p->color[0] = rand() % 256; //red
+    p->color[1] = rand() % 256; //green
+    p->color[2] = rand() % 256;   //blue
     game->n++;
 }
 
@@ -255,9 +265,13 @@ int check_keys(XEvent *e, Game *game)
         int key = XLookupKeysym(&e->xkey, 0);
         if (key == XK_Escape) {
             return 1;
+            // should allow a user to press "B" to turn on a bubbler
+            //to produce a constant stream of water particles that flow. 
+        } else if(key == XK_b || key == XK_B) { 
+            game->bubbler ^= 1;
         }
         //You may check other keys here.
-
+       
 
 
     }
@@ -270,11 +284,14 @@ void movement(Game *game)
 
     if (game->n <= 0)
         return;
-//    if (makeParticle(game, e->xbutton.x, y) {
-//        
-//        
-//        
-//    }; 
+    // bubbler stream speed
+    // starts in the middle of first box
+    if(game->bubbler) {
+        for(int i = 0 ;i < 5; i++) {
+            makeParticle(game, game->box[0].center.x, WINDOW_HEIGHT - 10);
+        }
+    }
+
     for (int i = 0; i < game->n; i++) {
         p = &game->particle[i];
         p->velocity.y -= GRAVITY;
@@ -287,20 +304,51 @@ void movement(Game *game)
             Shape *s = &game->box[index]; //**
             if (    p->s.center.y < s->center.y + s->height &&
                     p->s.center.x > s->center.x - s->width &&
-                    p->s.center.x < s->center.x + s->width) {
+                    p->s.center.x < s->center.x + s->width &&
+                    p->s.center.y > s->center.y - s->height) {
                 p->s.center.y = s->center.y + s->height;
                 p->velocity.y = -p->velocity.y;
                 p->velocity.y *= 0.5;
-
+                // applied a constant velocity modifier
+                // particles inclined to move to the right
+                p->velocity.x += 0.005;
             }
+            
         }
+        
+       
         //check for off-screen
+        
         if (p->s.center.y < 0.0 || p->s.center.y > WINDOW_HEIGHT) {
             //std::cout << "off screen" << std::endl;
             game->particle[i] = game->particle[game->n - 1];
             game->n--;
         }
-    }
+        
+        
+        
+       ///*************circle *************** 
+        double d = sqrt( //distance formula for circle collision
+            pow((p->s.center.x- game->circle.center.x), 2)
+            + 
+            pow((p->s.center.y-game->circle.center.y), 2)
+        );
+        if(d <= game->circle.radius) { //if distance is less |= than radius
+            //we have a collision!
+            //p->s.center.y = s->center.y + s->height;
+            p->velocity.y = -p->velocity.y;
+            p->velocity.y *= 0.5;
+            // applied a constant velocity modifier
+            // particles inclined to move to the right
+            if(p->velocity.x > 0) {
+                p->velocity.x = -p->velocity.x; // bounce off in the negative dir
+            }
+            p->velocity.x -= 0.01; //velocity of particle
+        }
+      
+        
+        ////******************circle *************
+    } 
 }
 
 const char* titles[] = { // constant character with array to display text
@@ -322,7 +370,7 @@ void render(Game *game)
     Shape *s;
     for (int i = 0; i < 5; i++) { // ***      
         //glColor3ub(90,140,90);
-        glColor3ub(110, 50, 120);
+        glColor3ub(110, 50, 120); // for color particles
         s = &game->box[i];
         glPushMatrix();
         glTranslatef(s->center.x, s->center.y, s->center.z);
@@ -334,27 +382,29 @@ void render(Game *game)
         glVertex2i(w, h);
         glVertex2i(w, -h);
         glEnd();
+        glPopMatrix();
         
         //glEnable(GL_TEXTURE_2D);
         //draw text
-        Rect r; 
-        unsigned int c = 0x00ffff44; // Displays text on Waterfall Model
-        //r.bot = y - 20;
-        r.left = 10;
-        r.center = 10;
-        ggprint12(&r, 1, c, titles[i]);
+        
+         Rect r;
+        unsigned int color = 0x0ffffff; // Displays text on Waterfall Model
+        r.bot = s->center.y - 10;
+        r.left = s->center.x;
+        r.center = s->center.x;
+        ggprint13(&r, 20, color, titles[i]);
         
         
-        
-        glPopMatrix();
     }
     //draw all particles here
     glPushMatrix();
-    glColor3ub(70, 160, 220);
+    
     for (int i = 0; i < game->n; i++) {
         Vec *c = &game->particle[i].s.center;
         w = 2;
         h = 2;
+        ////rgb:red, green,blue/unsigned byte of vector
+        glColor3ubv(game->particle[i].color);
         glBegin(GL_QUADS);
         glVertex2i(c->x - w, c->y - h);
         glVertex2i(c->x - w, c->y + h);
@@ -363,30 +413,26 @@ void render(Game *game)
         glEnd(); 
         glPopMatrix();
     }
-}
-    //glPushMatrix();
 
-   
-//    int num = 360;
-//    glColor3f(0.0,0.8,0.8);
-//    GLfloat r = game->circle.radius;// circle radius used to daw circle    
-//    GLfloat pix2 = 2.0f * 3.141592;
-//    GLint circle_x = game->circle.center.x;
-//    GLuint circle_y = game->circle.center.y;
-//
-//    glBegin(GL_TRIANGLE_FAN);
-//        glVertex2i(circle_x, circle_y); // center of circle
-//        for (int i = 0; i <= num; i++) {
-//            glVertex2i(
-//                circle_x + (r * cos(i * pix2 / num)),
-//               circle_y + (r * sin(i * pix2 / num))
-//            );
-       //         glEnd();
-    //glPopMatrix();
-//}
-//    glEnd();
-//    glPopMatrix();
-//}
+   //Display circlce
+    int num = 360;
+    glColor3f(0.0,0.8,0.8);
+    GLfloat r = game->circle.radius;// circle radius used to daw circle    
+    GLfloat pix2 = 2.0f * 3.141592;
+    GLint circle_x = game->circle.center.x;
+    GLuint circle_y = game->circle.center.y;
+
+    glBegin(GL_TRIANGLE_FAN);
+        glVertex2i(circle_x, circle_y); // center of circle
+        for (int i = 0; i <= num; i++) {
+            glVertex2i(
+                circle_x + (r * cos(i * pix2 / num)),
+               circle_y + (r * sin(i * pix2 / num))
+            );
+        }
+    glEnd();
+}
+
 
     
     
